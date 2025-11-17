@@ -1,0 +1,86 @@
+1. Configure GPIOA (PA5) as output and GPIOC (PC13) as input after enabling RCC clocks.
+
+2. Implement LED control using polling by reading PC13 (active-low) and toggling PA5.
+
+3. Configure EXTI13 by mapping PC13 in SYSCFG, enabling interrupt mask, and setting falling-edge trigger.
+
+4. Write EXTI15_10_IRQHandler() to toggle LED and clear EXTI pending flag.
+
+5. Test and verify LED operation in both polling and interrupt modes on NUCLEO-F401RE.
+
+#POLLING METHOD:
+#include <stdint.h>
+#define STM32F401xE
+#include "stm32f4xx.h"
+
+
+int main(void) {
+
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOCEN);
+
+    GPIOA->MODER &= ~(3 << (5 * 2));
+    GPIOA->MODER |=  (1 << (5 * 2));
+
+    GPIOA->OTYPER &= ~(1 << 5);
+
+    GPIOA->OSPEEDR &= ~(3 << (5 * 2));
+    GPIOA->OSPEEDR |=  (0 << (5 * 2));
+
+    GPIOA->PUPDR &= ~(3 << (5 * 2));
+
+    GPIOC->MODER &= ~(3 << (13 * 2));
+
+    while (1) {
+        if ((GPIOC->IDR & (1 << 13)) == 0) {
+            GPIOA->BSRR = (1 << 5);
+        }
+        else
+        {
+            GPIOA->BSRR = (1 << (5 + 16));
+        }
+
+    }
+}
+
+#INTERUPT METHOD
+
+#include <stdint.h>
+#define STM32F401xE
+#include "stm32f4xx.h"
+
+void EXTI15_10_IRQHandler(void);
+
+int main(void)
+{
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOCEN);
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+
+    GPIOA->MODER &= ~(3 << (5 * 2));
+    GPIOA->MODER |=  (1 << (5 * 2));   
+
+    GPIOA->OTYPER &= ~(1 << 5);        
+    GPIOA->OSPEEDR &= ~(3 << (5 * 2)); 
+    GPIOA->PUPDR &= ~(3 << (5 * 2));   
+    GPIOC->MODER &= ~(3 << (13 * 2));  
+
+    SYSCFG->EXTICR[3] &= ~(0xF << 4); 
+    SYSCFG->EXTICR[3] |=  (0x2 << 4);  
+
+    EXTI->IMR  |=  (1 << 13);   
+    EXTI->FTSR |=  (1 << 13);   
+    EXTI->RTSR &= ~(1 << 13);   
+    NVIC_EnableIRQ(EXTI15_10_IRQn);
+
+    while (1) 
+   {    
+    }
+}
+void EXTI15_10_IRQHandler(void)
+{
+    if (EXTI->PR & (1 << 13)) 
+    {
+        GPIOA->ODR ^= (1 << 5); 
+
+        EXTI->PR = (1 << 13);    
+    }
+}
